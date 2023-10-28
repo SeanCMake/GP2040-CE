@@ -1044,9 +1044,9 @@ void I2CDisplayAddon::drawStatusBar(Gamepad * gamepad)
 	switch (gamepad->getOptions().dpadMode)
 	{
 
-		case DPAD_MODE_DIGITAL:      statusBar += " DP"; break;
-		case DPAD_MODE_LEFT_ANALOG:  statusBar += " LS"; break;
-		case DPAD_MODE_RIGHT_ANALOG: statusBar += " RS"; break;
+		case DPAD_MODE_DIGITAL:      statusBar += " D"; break;
+		case DPAD_MODE_LEFT_ANALOG:  statusBar += " L"; break;
+		case DPAD_MODE_RIGHT_ANALOG: statusBar += " R"; break;
 	}
 
 	switch (Gamepad::resolveSOCDMode(gamepad->getOptions()))
@@ -1057,6 +1057,8 @@ void I2CDisplayAddon::drawStatusBar(Gamepad * gamepad)
 		case SOCD_MODE_FIRST_INPUT_PRIORITY:  statusBar += " SOCD-F"; break;
 		case SOCD_MODE_BYPASS:                statusBar += " SOCD-X"; break;
 	}
+	if (Storage::getInstance().getAddonOptions().macroOptions.enabled)
+		statusBar += " M";
 	drawText(0, 0, statusBar);
 }
 
