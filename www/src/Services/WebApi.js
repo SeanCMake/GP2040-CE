@@ -75,6 +75,43 @@ export const baseProfileOptions = {
 	],
 };
 
+export const basePeripheralMapping = {
+	peripheral: {
+		i2c0: {
+			enabled: 0,
+			sda: -1,
+			scl: -1,
+			speed: 400000,
+		},
+		i2c1: {
+			enabled: 0,
+			sda: -1,
+			scl: -1,
+			speed: 400000,
+		},
+		spi0: {
+			enabled: 0,
+			rx: -1,
+			cs: -1,
+			sck: -1,
+			tx: -1,
+		},
+		spi1: {
+			enabled: 0,
+			rx: -1,
+			cs: -1,
+			sck: -1,
+			tx: -1,
+		},
+		usb0: {
+			enabled: 0,
+			dp: -1,
+			enable5v: -1,
+			order: 0,
+		},
+	},
+};
+
 export const baseWiiControls = {
 	'nunchuk.analogStick.axisType': 1,
 	'nunchuk.buttonC': 1,
@@ -260,12 +297,6 @@ async function getLedOptions(setLoading) {
 		setLoading(false);
 
 		response.data.pledColor = rgbIntToHex(response.data.pledColor) || '#ffffff';
-		if (response.data.pledType === 1) {
-			response.data.pledIndex1 = response.data.pledPin1;
-			response.data.pledIndex2 = response.data.pledPin2;
-			response.data.pledIndex3 = response.data.pledPin3;
-			response.data.pledIndex4 = response.data.pledPin4;
-		}
 
 		return response.data;
 	} catch (error) {
@@ -275,8 +306,6 @@ async function getLedOptions(setLoading) {
 }
 
 async function setLedOptions(options) {
-	let data = sanitizeRequest(options);
-
 	return axios
 		.post(`${baseUrl}/api/setLedOptions`, sanitizeRequest(options))
 		.then((response) => {
@@ -339,65 +368,52 @@ async function setCustomTheme(customThemeOptions) {
 		});
 }
 
-async function setPinMappings(mappings) {
-	let data = {};
-	Object.keys(mappings).map(
-		(button, i) => (data[button] = mappings[button].pin),
-	);
-
-	return axios
-		.post(`${baseUrl}/api/setPinMappings`, sanitizeRequest(data))
-		.then((response) => {
-			console.log(response.data);
-			return true;
-		})
-		.catch((err) => {
-			console.error(err);
-			return false;
-		});
-}
-
-async function getProfileOptions(setLoading) {
-	setLoading(true);
-
+async function getButtonLayouts(setLoading) {
 	try {
-		const response = await axios.get(`${baseUrl}/api/getProfileOptions`);
-		let profileOptions = { ...baseProfileOptions };
-		response.data['alternativePinMappings'].forEach((altButtons, index) => {
-			for (let prop of Object.keys(altButtons))
-				profileOptions['alternativePinMappings'][index][prop].pin = parseInt(
-					response.data['alternativePinMappings'][index][prop],
-				);
-		});
-		setLoading(false);
-		return profileOptions;
+		const response = await axios.get(`${baseUrl}/api/getButtonLayouts`);
+
+		return response.data;
 	} catch (error) {
 		console.error(error);
-		return false;
 	}
 }
 
-async function setProfileOptions(options) {
-	let data = {};
-	data['alternativePinMappings'] = [];
-	options['alternativePinMappings'].forEach((altButtons, index) => {
-		let altMapping = {};
-		Object.keys(options['alternativePinMappings'][index]).map(
-			(button, i) => (altMapping[button] = altButtons[button].pin),
-		);
-		data['alternativePinMappings'].push(altMapping);
-	});
+async function getButtonLayoutDefs(setLoading) {
+	try {
+		const response = await axios.get(`${baseUrl}/api/getButtonLayoutDefs`);
 
-	return axios
-		.post(`${baseUrl}/api/setProfileOptions`, sanitizeRequest(data))
-		.then((response) => {
-			console.log(response.data);
-			return true;
-		})
-		.catch((err) => {
-			console.error(err);
-			return false;
-		});
+		return response.data;
+	} catch (error) {
+		console.error(error);
+	}
+}
+
+async function getPinMappings() {
+	try {
+		const { data } = await axios.get(`${baseUrl}/api/getPinMappings`);
+		return data;
+	} catch (error) {
+		console.log(error);
+	}
+}
+
+async function setPinMappings(mappings) {
+	return axios.post(`${baseUrl}/api/setPinMappings`, mappings);
+}
+
+async function getProfileOptions() {
+	try {
+		const { data } = await axios.get(`${baseUrl}/api/getProfileOptions`);
+		return data?.alternativePinMappings;
+	} catch (error) {
+		console.log(error);
+	}
+}
+
+async function setProfileOptions(mappings) {
+	return axios.post(`${baseUrl}/api/setProfileOptions`, {
+		alternativePinMappings: mappings,
+	});
 }
 
 async function getKeyMappings(setLoading) {
@@ -420,9 +436,7 @@ async function getKeyMappings(setLoading) {
 
 async function setKeyMappings(mappings) {
 	let data = {};
-	Object.keys(mappings).map(
-		(button, i) => (data[button] = mappings[button].key),
-	);
+	Object.keys(mappings).map((button) => (data[button] = mappings[button].key));
 
 	return axios
 		.post(`${baseUrl}/api/setKeyMappings`, sanitizeRequest(data))
@@ -444,11 +458,13 @@ async function getAddonsOptions(setLoading) {
 		const data = response.data;
 		setLoading(false);
 
-		let mappings = { ...baseButtonMappings };
-		for (let prop of Object.keys(data.keyboardHostMap))
-			mappings[prop].key = parseInt(data.keyboardHostMap[prop]);
-		data.keyboardHostMap = mappings;
-		return data;
+		// Merge saved keyMappings with defaults
+		const keyboardHostMap = Object.entries(data.keyboardHostMap).reduce(
+			(acc, [key, value]) => ({ ...acc, [key]: { ...acc[key], key: value } }),
+			baseButtonMappings,
+		);
+
+		return { ...data, keyboardHostMap };
 	} catch (error) {
 		setLoading(false);
 		console.error(error);
@@ -459,7 +475,7 @@ async function setAddonsOptions(options) {
 	if (options.keyboardHostMap) {
 		let data = {};
 		Object.keys(options.keyboardHostMap).map(
-			(button, i) => (data[button] = options.keyboardHostMap[button].key),
+			(button) => (data[button] = options.keyboardHostMap[button].key),
 		);
 		options.keyboardHostMap = data;
 	}
@@ -547,6 +563,35 @@ async function setWiiControls(mappings) {
 		});
 }
 
+async function getPeripheralOptions(setLoading) {
+	setLoading(true);
+	try {
+		const response = await axios.get(`${baseUrl}/api/getPeripheralOptions`);
+		setLoading(false);
+
+		let mappings = { ...basePeripheralMapping, ...response.data };
+		return mappings;
+	} catch (error) {
+		setLoading(false);
+		console.error(error);
+	}
+}
+
+async function setPeripheralOptions(mappings) {
+	console.dir(mappings);
+
+	return axios
+		.post(`${baseUrl}/api/setPeripheralOptions`, sanitizeRequest(mappings))
+		.then((response) => {
+			console.log(response.data);
+			return true;
+		})
+		.catch((err) => {
+			console.error(err);
+			return false;
+		});
+}
+
 async function getFirmwareVersion(setLoading) {
 	setLoading(true);
 
@@ -615,10 +660,6 @@ async function reboot(bootMode) {
 
 function sanitizeRequest(request) {
 	const newRequest = { ...request };
-	delete newRequest.pledIndex1;
-	delete newRequest.pledIndex2;
-	delete newRequest.pledIndex3;
-	delete newRequest.pledIndex4;
 	delete newRequest.usedPins;
 	return newRequest;
 }
@@ -633,6 +674,7 @@ const WebApi = {
 	setLedOptions,
 	getCustomTheme,
 	setCustomTheme,
+	getPinMappings,
 	setPinMappings,
 	getProfileOptions,
 	setProfileOptions,
@@ -645,6 +687,10 @@ const WebApi = {
 	setPS4Options,
 	getWiiControls,
 	setWiiControls,
+	getPeripheralOptions,
+	setPeripheralOptions,
+	getButtonLayouts,
+	getButtonLayoutDefs,
 	getSplashImage,
 	setSplashImage,
 	getFirmwareVersion,
